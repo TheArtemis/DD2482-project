@@ -65,6 +65,7 @@ Run quality checks with:
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
+uv run ty check
 ```
 
 Run only the migration and database integration tests with:
