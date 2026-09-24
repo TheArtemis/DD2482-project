@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Create short, shareable links." />
+    <title>Snip — URL shortener</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Snip home">
+        <span class="brand-mark" aria-hidden="true">S</span>
+        <span>snip</span>
+      </a>
+      <a class="api-link" href="/docs">API docs <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <p class="eyebrow">Short links. Clear insights.</p>
+        <h1 id="hero-title">Make every link<br /><em>easier to share.</em></h1>
+        <p class="intro">Turn unwieldy URLs into compact links and see how often they are opened.</p>
+
+        <form id="shorten-form" class="shorten-form">
+          <label for="destination">Paste a long URL</label>
+          <div class="input-row">
+            <input
+              id="destination"
+              name="destination"
+              type="url"
+              inputmode="url"
+              autocomplete="url"
+              placeholder="https://example.com/a/very/long/path"
+              required
+            />
+            <button type="submit">Shorten link</button>
+          </div>
+          <p id="form-message" class="message" role="status" aria-live="polite"></p>
+        </form>
+
+        <section id="result" class="result" aria-labelledby="result-title" hidden>
+          <div>
+            <p id="result-title" class="result-label">Your short link</p>
+            <a id="short-url" class="short-url" href="#" target="_blank" rel="noopener"></a>
+          </div>
+          <button id="copy-button" class="secondary-button" type="button">Copy</button>
+        </section>
+      </section>
+
+      <section class="manage" aria-labelledby="manage-title">
+        <div>
+          <p class="eyebrow">Already made one?</p>
+          <h2 id="manage-title">Check a link</h2>
+          <p>Enter its short code to view redirects or disable the link.</p>
+        </div>
+        <form id="stats-form" class="stats-form">
+          <label for="code">Short code</label>
+          <div class="input-row compact">
+            <input id="code" name="code" type="text" placeholder="aB3xYz7" minlength="4" maxlength="32" required />
+            <button type="submit">View stats</button>
+          </div>
+          <p id="stats-message" class="message" role="status" aria-live="polite"></p>
+        </form>
+
+        <article id="stats-card" class="stats-card" hidden>
+          <div class="metric">
+            <span id="redirect-count">0</span>
+            <small>redirects</small>
+          </div>
+          <div class="stats-details">
+            <p><strong>Destination</strong><a id="stats-destination" href="#" target="_blank" rel="noopener"></a></p>
+            <p><strong>Created</strong><span id="created-at"></span></p>
+            <p><strong>Status</strong><span id="link-status" class="status-pill"></span></p>
+          </div>
+          <button id="delete-button" class="danger-button" type="button">Disable link</button>
+        </article>
+      </section>
+    </main>
+
+    <footer><span>Snip URL shortener</span><span id="version">Version …</span></footer>
+  </body>
+</html>
