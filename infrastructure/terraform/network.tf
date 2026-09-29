@@ -11,6 +11,7 @@ resource "azurerm_subnet" "aks" {
   resource_group_name  = data.azurerm_resource_group.project.name
   virtual_network_name = azurerm_virtual_network.project.name
   address_prefixes     = ["10.20.0.0/22"]
+  service_endpoints    = ["Microsoft.KeyVault"]
 }
 
 resource "azurerm_subnet" "postgres" {
