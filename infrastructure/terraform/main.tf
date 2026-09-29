@@ -6,6 +6,7 @@ data "azurerm_resource_group" "project" {
 
 locals {
   resource_prefix = "${var.project_name}-${random_string.suffix.result}"
+  location        = var.location
   common_tags = merge(var.tags, {
     Project     = var.project_name
     ManagedBy   = "Terraform"

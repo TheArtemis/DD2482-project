@@ -11,7 +11,7 @@ resource "random_string" "suffix" {
 resource "azurerm_storage_account" "state" {
   name                          = "tfstate${random_string.suffix.result}"
   resource_group_name           = data.azurerm_resource_group.project.name
-  location                      = data.azurerm_resource_group.project.location
+  location                      = var.location
   account_tier                  = "Standard"
   account_replication_type      = "LRS"
   min_tls_version               = "TLS1_2"

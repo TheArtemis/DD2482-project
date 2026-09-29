@@ -4,18 +4,20 @@ resource "random_password" "postgres" {
 }
 
 resource "azurerm_postgresql_flexible_server" "project" {
-  name                   = "${local.resource_prefix}-postgres"
-  resource_group_name    = data.azurerm_resource_group.project.name
-  location               = data.azurerm_resource_group.project.location
-  version                = "16"
-  delegated_subnet_id    = azurerm_subnet.postgres.id
-  private_dns_zone_id    = azurerm_private_dns_zone.postgres.id
-  administrator_login    = var.postgres_admin_login
-  administrator_password = random_password.postgres.result
-  sku_name               = "B_Standard_B1ms"
-  storage_mb             = 32768
-  backup_retention_days  = 7
-  tags                   = local.common_tags
+  name                          = "${local.resource_prefix}-postgres"
+  resource_group_name           = data.azurerm_resource_group.project.name
+  location                      = local.location
+  version                       = "16"
+  delegated_subnet_id           = azurerm_subnet.postgres.id
+  private_dns_zone_id           = azurerm_private_dns_zone.postgres.id
+  public_network_access_enabled = false
+  administrator_login           = var.postgres_admin_login
+  administrator_password        = random_password.postgres.result
+  sku_name                      = "B_Standard_B1ms"
+  storage_mb                    = 32768
+  backup_retention_days         = 7
+  zone                          = "2"
+  tags                          = local.common_tags
 
   depends_on = [azurerm_private_dns_zone_virtual_network_link.postgres]
 }

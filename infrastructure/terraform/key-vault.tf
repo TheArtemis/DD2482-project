@@ -1,6 +1,6 @@
 resource "azurerm_key_vault" "project" {
   name                       = "${local.resource_prefix}-kv"
-  location                   = data.azurerm_resource_group.project.location
+  location                   = local.location
   resource_group_name        = data.azurerm_resource_group.project.name
   tenant_id                  = data.azurerm_client_config.current.tenant_id
   sku_name                   = "standard"
@@ -12,7 +12,7 @@ resource "azurerm_key_vault" "project" {
 
 resource "azurerm_user_assigned_identity" "workload" {
   name                = "${local.resource_prefix}-workload"
-  location            = data.azurerm_resource_group.project.location
+  location            = local.location
   resource_group_name = data.azurerm_resource_group.project.name
   tags                = local.common_tags
 }

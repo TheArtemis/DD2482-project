@@ -10,3 +10,9 @@ variable "resource_group_name" {
   type        = string
   default     = "devops-project"
 }
+
+variable "location" {
+  description = "Azure region for state storage. Must satisfy the subscription's allowed-region policy."
+  type        = string
+  default     = "germanywestcentral"
+}

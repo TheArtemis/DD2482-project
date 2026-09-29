@@ -1,6 +1,6 @@
 resource "azurerm_user_assigned_identity" "aks" {
   name                = "${local.resource_prefix}-aks"
-  location            = data.azurerm_resource_group.project.location
+  location            = local.location
   resource_group_name = data.azurerm_resource_group.project.name
   tags                = local.common_tags
 }
@@ -13,7 +13,7 @@ resource "azurerm_role_assignment" "aks_network" {
 
 resource "azurerm_kubernetes_cluster" "project" {
   name                = "${local.resource_prefix}-aks"
-  location            = data.azurerm_resource_group.project.location
+  location            = local.location
   resource_group_name = data.azurerm_resource_group.project.name
   dns_prefix          = "${local.resource_prefix}-aks"
   # AKS requires a separate Azure-managed resource group for node VMs, disks,
@@ -26,6 +26,10 @@ resource "azurerm_kubernetes_cluster" "project" {
     vm_size        = var.aks_vm_size
     node_count     = var.aks_node_count
     vnet_subnet_id = azurerm_subnet.aks.id
+
+    upgrade_settings {
+      max_surge = "10%"
+    }
   }
 
   identity {

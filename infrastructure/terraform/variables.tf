@@ -11,6 +11,12 @@ variable "resource_group_name" {
   default     = "devops-project"
 }
 
+variable "location" {
+  description = "Azure region for project resources. Must satisfy the subscription's allowed-region policy."
+  type        = string
+  default     = "spaincentral"
+}
+
 variable "project_name" {
   description = "Short lowercase project name used in Azure resource names."
   type        = string
@@ -34,7 +40,7 @@ variable "aks_node_count" {
 
 variable "aks_vm_size" {
   type    = string
-  default = "Standard_B2s"
+  default = "Standard_D2s_v4"
 }
 
 variable "postgres_admin_login" {

@@ -1,7 +1,8 @@
 # This is the existing resource group assigned to the team.
 resource_group_name = "devops-project"
+location            = "spaincentral"
 
 # subscription_id = "00000000-0000-0000-0000-000000000000"
 aks_node_count      = 1
-aks_vm_size         = "Standard_B2s"
+aks_vm_size         = "Standard_D2s_v4"
 enable_monitoring   = false

@@ -1,6 +1,6 @@
 resource "azurerm_virtual_network" "project" {
   name                = "${local.resource_prefix}-vnet"
-  location            = data.azurerm_resource_group.project.location
+  location            = local.location
   resource_group_name = data.azurerm_resource_group.project.name
   address_space       = ["10.20.0.0/16"]
   tags                = local.common_tags
