@@ -45,4 +45,12 @@ jobs:
           scanners: vuln
           severity: HIGH,CRITICAL
           exit-code: '1'
-          skip-dirs: infrastructure
+
+      - name: Run Trivy infrastructure configuration scan
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: config
+          scan-ref: infrastructure
+          scanners: misconfig
+          severity: HIGH,CRITICAL
+          exit-code: '1'
