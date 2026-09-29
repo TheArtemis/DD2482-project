@@ -1,0 +1,3 @@
+resource_group_name = "devops-project"
+location            = "germanywestcentral"
+# subscription_id = "00000000-0000-0000-0000-000000000000"
