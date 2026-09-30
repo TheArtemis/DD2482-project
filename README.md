@@ -74,6 +74,29 @@ Run only the migration and database integration tests with:
 uv run pytest -m integration
 ```
 
+## Local configuration and image checks
+
+These checks do not require Azure credentials or running Azure resources. They
+use downloaded Terraform providers, Kubernetes schemas, and container images.
+With Terraform, TFLint, kubectl, Docker, and Trivy installed, run:
+
+```bash
+terraform fmt -check -recursive infrastructure
+for module in infrastructure/bootstrap-state infrastructure/terraform; do
+  terraform -chdir="$module" init -backend=false -input=false -lockfile=readonly
+  terraform -chdir="$module" validate -no-color
+  tflint --chdir="$module" --format=compact
+done
+
+set -o pipefail
+kubectl kustomize k8s | docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0 -strict -summary -
+docker build --tag url-shortener:ci .
+trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 url-shortener:ci
+```
+
+The pull-request workflows run the same configuration and image gates alongside
+the existing application, source dependency, and secret checks.
+
 Runtime and development dependencies are declared in `pyproject.toml` and
 resolved reproducibly by the committed `uv.lock`. Use `uv add <package>` for a
 runtime dependency or `uv add --dev <package>` for a development dependency.
