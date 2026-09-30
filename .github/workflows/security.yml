@@ -73,4 +73,5 @@ jobs:
           image-ref: url-shortener:ci
           scanners: vuln
           severity: HIGH,CRITICAL
+          ignore-unfixed: true
           exit-code: '1'

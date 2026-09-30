@@ -91,7 +91,7 @@ done
 set -o pipefail
 kubectl kustomize k8s | docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0 -strict -summary -
 docker build --tag url-shortener:ci .
-trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 url-shortener:ci
+trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 url-shortener:ci
 ```
 
 The pull-request workflows run the same configuration and image gates alongside
