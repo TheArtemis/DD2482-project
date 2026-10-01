@@ -1,0 +1,81 @@
+name: Release to AKS through Argo CD
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # The desired-state commit also triggers this workflow; don't publish it again.
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push immutable image to ACR
+        env:
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          ACR_LOGIN_SERVER="$(az acr show --name "$ACR_NAME" --query loginServer --output tsv)"
+          az acr login --name "$ACR_NAME"
+          docker build --tag "$ACR_LOGIN_SERVER/url-shortener:$IMAGE_TAG" .
+          docker push "$ACR_LOGIN_SERVER/url-shortener:$IMAGE_TAG"
+
+      - name: Set production desired state to this commit
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+
+          tag = os.environ["IMAGE_TAG"]
+          kustomization = Path("k8s/overlays/production/kustomization.yaml")
+          content = kustomization.read_text()
+          content, count = re.subn(r"(?m)^    newTag: .+$", f"    newTag: {tag}", content)
+          if count != 1:
+              raise SystemExit(f"Expected one production image tag, found {count}")
+          kustomization.write_text(content)
+
+          patch = Path("k8s/overlays/production/deployment-patch.yaml")
+          content = patch.read_text()
+          content, count = re.subn(
+              r"(?m)^              value: deploy$", f"              value: {tag}", content
+          )
+          if count != 1:
+              raise SystemExit(f"Expected one production GIT_SHA value, found {count}")
+          patch.write_text(content)
+          PY
+
+      - name: Commit production image update
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add k8s/overlays/production/kustomization.yaml \
+            k8s/overlays/production/deployment-patch.yaml
+          git commit -m "chore(release): deploy ${IMAGE_TAG}"
+          git push origin HEAD:main
