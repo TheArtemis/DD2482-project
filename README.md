@@ -89,13 +89,18 @@ for module in infrastructure/bootstrap-state infrastructure/terraform; do
 done
 
 set -o pipefail
-kubectl kustomize k8s | docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0 -strict -summary -
+kubectl kustomize k8s/overlays/production | docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0 -strict -summary -
 docker build --tag url-shortener:ci .
 trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 url-shortener:ci
 ```
 
 The pull-request workflows run the same configuration and image gates alongside
 the existing application, source dependency, and secret checks.
+
+## Kubernetes and Argo CD
+
+The Kubernetes base and production overlay are in `k8s/`. To bootstrap Argo CD
+in AKS and register the application for GitOps deployment, follow [the Kubernetes deployment guide](k8s/README.md).
 
 Runtime and development dependencies are declared in `pyproject.toml` and
 resolved reproducibly by the committed `uv.lock`. Use `uv add <package>` for a

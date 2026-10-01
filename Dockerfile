@@ -20,6 +20,7 @@ RUN uv sync --locked --no-dev --no-install-project
 COPY alembic.ini ./
 COPY migrations ./migrations
 COPY app ./app
+COPY scripts ./scripts
 
 RUN adduser --disabled-password --gecos "" appuser \
     && chown -R appuser:appuser /app
@@ -28,4 +29,4 @@ USER appuser
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host ${APP_HOST} --port ${APP_PORT}"]
+CMD ["sh", "-c", "uvicorn app.main:app --host ${APP_HOST} --port ${APP_PORT}"]
