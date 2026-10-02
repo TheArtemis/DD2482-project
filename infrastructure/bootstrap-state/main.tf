@@ -18,6 +18,12 @@ resource "azurerm_storage_account" "state" {
   shared_access_key_enabled     = false
   public_network_access_enabled = true
 
+  network_rules {
+    default_action = "Deny"
+    bypass         = ["AzureServices"]
+    ip_rules       = [var.operator_public_ip]
+  }
+
   blob_properties {
     versioning_enabled = true
   }

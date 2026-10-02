@@ -45,4 +45,33 @@ jobs:
           scanners: vuln
           severity: HIGH,CRITICAL
           exit-code: '1'
-          skip-dirs: infrastructure
+
+      - name: Run Trivy infrastructure configuration scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: infrastructure
+          scanners: misconfig
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+  image:
+    name: Build and scan container image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Build image locally
+        run: docker build --tag url-shortener:ci .
+
+      - name: Scan built image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: url-shortener:ci
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'

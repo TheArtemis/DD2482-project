@@ -1,0 +1,66 @@
+name: Infrastructure and manifest checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: config-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  terraform:
+    name: Terraform (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - infrastructure/bootstrap-state
+          - infrastructure/terraform
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.14.6
+
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive ${{ matrix.module }}
+
+      - name: Initialize providers without an Azure backend
+        working-directory: ${{ matrix.module }}
+        run: terraform init -backend=false -input=false -lockfile=readonly
+
+      - name: Validate Terraform configuration
+        working-directory: ${{ matrix.module }}
+        run: terraform validate -no-color
+
+      - name: Set up TFLint
+        uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: v0.63.0
+
+      - name: Lint Terraform configuration
+        run: tflint --chdir=${{ matrix.module }} --format=compact
+
+  kubernetes:
+    name: Render and validate Kubernetes manifests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Render Kustomize and validate schemas
+        run: |
+          set -o pipefail
+          kubectl kustomize k8s/overlays/production | docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0 -strict -summary -

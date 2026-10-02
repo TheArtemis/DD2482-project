@@ -6,3 +6,7 @@ location            = "spaincentral"
 aks_node_count      = 1
 aks_vm_size         = "Standard_D2s_v4"
 enable_monitoring   = false
+
+# Replace these with your actual public IP and AKS egress range before apply.
+# operator_public_ip          = "203.0.113.10"
+# aks_api_authorized_ip_ranges = ["203.0.113.10/32", "198.51.100.20/32"]

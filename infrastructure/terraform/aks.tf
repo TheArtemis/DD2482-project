@@ -18,8 +18,13 @@ resource "azurerm_kubernetes_cluster" "project" {
   dns_prefix          = "${local.resource_prefix}-aks"
   # AKS requires a separate Azure-managed resource group for node VMs, disks,
   # and scale sets. It cannot reuse the cluster's resource group.
-  node_resource_group = "${data.azurerm_resource_group.project.name}-aks-nodes"
-  sku_tier            = "Free"
+  node_resource_group               = "${data.azurerm_resource_group.project.name}-aks-nodes"
+  sku_tier                          = "Free"
+  role_based_access_control_enabled = true
+
+  api_server_access_profile {
+    authorized_ip_ranges = var.aks_api_authorized_ip_ranges
+  }
 
   default_node_pool {
     name           = "system"

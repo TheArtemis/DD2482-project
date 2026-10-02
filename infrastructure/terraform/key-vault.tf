@@ -8,6 +8,13 @@ resource "azurerm_key_vault" "project" {
   purge_protection_enabled   = false
   rbac_authorization_enabled = true
   tags                       = local.common_tags
+
+  network_acls {
+    default_action             = "Deny"
+    bypass                     = "AzureServices"
+    ip_rules                   = [var.operator_public_ip]
+    virtual_network_subnet_ids = [azurerm_subnet.aks.id]
+  }
 }
 
 resource "azurerm_user_assigned_identity" "workload" {
