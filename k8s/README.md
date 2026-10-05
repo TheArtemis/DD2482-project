@@ -57,12 +57,40 @@ client secret. Before merging to `main`:
    `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID`.
 4. Add the repository Actions variable `ACR_NAME` with the registry resource
    name (not its login server URL).
-5. Allow GitHub Actions to push the release commit to `main`. If branch
-   protection disallows that, the release workflow's final push will fail and
-   the Argo CD desired state will stay on the previous image.
+5. Create a dedicated GitHub App with repository **Contents: Read and write**
+   permission and install it on this repository. Add its client ID as the
+   Actions variable `RELEASE_APP_CLIENT_ID` and its private key as the Actions
+   secret `RELEASE_APP_PRIVATE_KEY`. The workflow generates a temporary,
+   repository-scoped installation token for its desired-state commit.
+6. Protect `main` with required developer PRs, reviews, and CI checks. Give only
+   the release App an **Always** bypass for the rules that would block its
+   direct desired-state commit (including required PRs and checks), and allow
+   it to push if push restrictions are enabled. Do not grant this exception to
+   developers. The workflow stages only the two production image/version files
+   and never force-pushes. Contents write permission alone does not bypass
+   branch protection.
 
-The workflow skips bot-authored pushes so a desired-state commit cannot start a
-second release.
+See GitHub's [App-token setup guide](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/making-authenticated-api-requests-with-a-github-app-in-a-github-actions-workflow)
+and [ruleset bypass configuration](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets).
+
+Developers work on feature branches and merge reviewed PRs. A push to `main`
+runs the same quality, security, and configuration workflows via `workflow_call`;
+the release job requires all three to succeed on that exact commit. PR checks
+still run independently and should remain required merge gates. Only the release
+job receives Azure OIDC permission and the release App credentials.
+
+Before publishing, the workflow verifies that `main` still points at the source
+commit, validates both manifest replacements, then builds and scans the release
+image. It pushes that same image to ACR and commits the tag and `GIT_SHA` directly
+to `main` with the release App token. The bot commit does not require a second PR.
+If `main` advances during release, the normal Git push fails instead of overwriting
+newer changes; the newer commit's workflow provides the next release.
+
+The release trigger excludes pushes changing only `k8s/overlays/production/**`.
+This prevents a desired-state commit or an overlay-only rollback from publishing
+another image, regardless of which identity authored it. PR checks still validate
+overlay changes. Configure Argo CD separately before expecting these commits to
+deploy the application.
 
 ## Sync hooks
 
