@@ -22,11 +22,6 @@ spec:
           env:
             - name: SMOKE_TEST_BASE_URL
               value: http://url-shortener
-            - name: DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: url-shortener-config
-                  key: DATABASE_URL
           resources:
             requests:
               cpu: 50m

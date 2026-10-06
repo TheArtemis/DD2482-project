@@ -51,6 +51,11 @@ resource "azurerm_kubernetes_cluster" "project" {
   oidc_issuer_enabled       = true
   workload_identity_enabled = true
 
+  key_vault_secrets_provider {
+    secret_rotation_enabled  = true
+    secret_rotation_interval = "2m"
+  }
+
   dynamic "oms_agent" {
     for_each = var.enable_monitoring ? [1] : []
     content {
