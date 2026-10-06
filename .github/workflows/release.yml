@@ -62,7 +62,7 @@ jobs:
           patch = Path("k8s/overlays/production/deployment-patch.yaml")
           content = patch.read_text()
           content, count = re.subn(
-              r"(?m)^              value: deploy$", f"              value: {tag}", content
+              r"(?m)^              value: .+$", f"              value: {tag}", content
           )
           if count != 1:
               raise SystemExit(f"Expected one production GIT_SHA value, found {count}")
