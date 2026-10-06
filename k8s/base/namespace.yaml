@@ -3,7 +3,6 @@ kind: Namespace
 metadata:
   name: url-shortener
   annotations:
-    argocd.argoproj.io/hook: PreSync
     argocd.argoproj.io/sync-wave: "-3"
   labels:
     name: url-shortener
