@@ -16,4 +16,4 @@ spec:
         - name: app
           env:
             - name: GIT_SHA
-              value: 0b73bb7059c084d127b3630c5dd33044270aebff
+              value: 32bae1013a6ca56e9c309813251615b8247816d2

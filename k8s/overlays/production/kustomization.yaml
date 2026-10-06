@@ -7,4 +7,4 @@ patches:
   - path: deployment-patch.yaml
 images:
   - name: urlshortenerpf9nt4acr.azurecr.io/url-shortener
-    newTag: 0b73bb7059c084d127b3630c5dd33044270aebff
+    newTag: 32bae1013a6ca56e9c309813251615b8247816d2
