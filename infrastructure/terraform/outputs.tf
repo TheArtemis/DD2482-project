@@ -13,6 +13,11 @@ output "key_vault_name" {
   description = "Key Vault that holds the database connection secret."
 }
 
+output "tenant_id" {
+  value       = data.azurerm_client_config.current.tenant_id
+  description = "Microsoft Entra tenant ID used by the Key Vault CSI SecretProviderClass."
+}
+
 output "workload_identity_client_id" {
   value       = azurerm_user_assigned_identity.workload.client_id
   description = "Client ID for the URL-shortener Kubernetes ServiceAccount annotation."
