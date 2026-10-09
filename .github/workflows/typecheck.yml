@@ -1,7 +1,6 @@
-name: Pull request checks
+name: Application quality checks
 
 on:
-  pull_request:
   workflow_call:
 
 permissions:
