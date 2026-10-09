@@ -54,12 +54,12 @@ variable "operator_public_ip" {
 }
 
 variable "aks_api_authorized_ip_ranges" {
-  description = "Public CIDR ranges allowed to reach the AKS API; include administrator and cluster egress addresses."
+  description = "Public CIDR ranges allowed to reach the AKS API; include administrator and cluster egress addresses. An empty list allows access from any IP."
   type        = list(string)
 
   validation {
-    condition     = length(var.aks_api_authorized_ip_ranges) > 0 && alltrue([for range in var.aks_api_authorized_ip_ranges : !strcontains(range, ":") && can(cidrhost(range, 0)) && range != "0.0.0.0/0"])
-    error_message = "Provide at least one valid CIDR range and do not allow 0.0.0.0/0."
+    condition     = alltrue([for range in var.aks_api_authorized_ip_ranges : !strcontains(range, ":") && can(cidrhost(range, 0)) && range != "0.0.0.0/0"])
+    error_message = "Provide valid IPv4 CIDR ranges, or an empty list to allow access from any IP. Do not use 0.0.0.0/0."
   }
 }
 

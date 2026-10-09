@@ -1,0 +1,22 @@
+name: Pull request checks
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pull-request-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Keep these IDs aligned with release.yml and the required status check names.
+  quality:
+    uses: ./.github/workflows/typecheck.yml
+
+  security:
+    uses: ./.github/workflows/security.yml
+
+  configuration:
+    uses: ./.github/workflows/config-validation.yml

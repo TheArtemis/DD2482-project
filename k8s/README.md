@@ -4,7 +4,8 @@
 
 Argo CD is installed once per cluster. Connect `kubectl` to the AKS cluster
 first, then install the upstream stable manifests and register this repository's
-application after creating the database secret:
+application. Terraform enables the Azure Key Vault Secrets Store CSI Driver
+add-on on AKS; no database value is copied manually into the cluster:
 
 ```bash
 az aks get-credentials \
@@ -20,8 +21,9 @@ kubectl rollout status deployment/argocd-server -n argocd --timeout=5m
 The Argo CD `Application` watches `main` at `k8s/overlays/production`, uses
 Kustomize, and automatically syncs, prunes removed resources, and repairs live
 drift. The production overlay uses an immutable source commit SHA for the app
-image. The namespace is declared in Kustomize; the secret bootstrap below
-creates it before Argo CD's first sync.
+image. The namespace, Workload Identity ServiceAccount, and SecretProviderClass
+run in earlier `PreSync` waves so the migration Job can retrieve its database
+connection on the first Argo CD synchronization.
 
 For the initial login, port-forward the API server and retrieve the generated
 admin password:
@@ -57,12 +59,40 @@ client secret. Before merging to `main`:
    `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID`.
 4. Add the repository Actions variable `ACR_NAME` with the registry resource
    name (not its login server URL).
-5. Allow GitHub Actions to push the release commit to `main`. If branch
-   protection disallows that, the release workflow's final push will fail and
-   the Argo CD desired state will stay on the previous image.
+5. Create a dedicated GitHub App with repository **Contents: Read and write**
+   permission and install it on this repository. Add its client ID as the
+   Actions variable `RELEASE_APP_CLIENT_ID` and its private key as the Actions
+   secret `RELEASE_APP_PRIVATE_KEY`. The workflow generates a temporary,
+   repository-scoped installation token for its desired-state commit.
+6. Protect `main` with required developer PRs, reviews, and CI checks. Give only
+   the release App an **Always** bypass for the rules that would block its
+   direct desired-state commit (including required PRs and checks), and allow
+   it to push if push restrictions are enabled. Do not grant this exception to
+   developers. The workflow stages only the two production image/version files
+   and never force-pushes. Contents write permission alone does not bypass
+   branch protection.
 
-The workflow skips bot-authored pushes so a desired-state commit cannot start a
-second release.
+See GitHub's [App-token setup guide](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/making-authenticated-api-requests-with-a-github-app-in-a-github-actions-workflow)
+and [ruleset bypass configuration](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets).
+
+Developers work on feature branches and merge reviewed PRs. A push to `main`
+runs the same quality, security, and configuration workflows via `workflow_call`;
+the release job requires all three to succeed on that exact commit. PR checks
+still run independently and should remain required merge gates. Only the release
+job receives Azure OIDC permission and the release App credentials.
+
+Before publishing, the workflow verifies that `main` still points at the source
+commit, validates both manifest replacements, then builds and scans the release
+image. It pushes that same image to ACR and commits the tag and `GIT_SHA` directly
+to `main` with the release App token. The bot commit does not require a second PR.
+If `main` advances during release, the normal Git push fails instead of overwriting
+newer changes; the newer commit's workflow provides the next release.
+
+The release trigger excludes pushes changing only `k8s/overlays/production/**`.
+This prevents a desired-state commit or an overlay-only rollback from publishing
+another image, regardless of which identity authored it. PR checks still validate
+overlay changes. Configure Argo CD separately before expecting these commits to
+deploy the application.
 
 ## Sync hooks
 
@@ -70,31 +100,54 @@ The `PreSync` migration Job runs `alembic upgrade head` from the same SHA-tagged
 image before Argo CD updates the Deployment. The `PostSync` smoke-test Job creates
 a temporary link, verifies the redirect destination, and deletes the link after
 the Deployment becomes healthy. A failed hook leaves the Argo CD sync unhealthy
-for inspection. Both jobs read `DATABASE_URL` from `url-shortener-config`.
+for inspection. The migration Job and Deployment mount the Key Vault CSI volume.
+The `SecretProviderClass` mirrors Key Vault's `database-url` value into the
+`url-shortener-config` Kubernetes Secret as the `DATABASE_URL` key expected by
+the application.
 
-## Runtime database secret setup
+## Key Vault CSI configuration
+
+Terraform creates the Key Vault secret, Workload Identity, federated credential,
+and least-privilege `Key Vault Secrets User` assignment. It also enables the AKS
+CSI add-on and automatic secret rotation. The non-secret identifiers in
+`k8s/base/service-account.yaml` and `k8s/base/secret-provider-class.yaml` must
+match these Terraform outputs:
 
 ```bash
-kubectl create namespace url-shortener --dry-run=client -o yaml | kubectl apply -f -
-
-DATABASE_URL="$(az keyvault secret show \
-  --vault-name urlshortener-pf9nt4-kv \
-  --name database-url \
-  --query value \
-  --output tsv)"
-
-kubectl create secret generic url-shortener-config \
-  --namespace url-shortener \
-  --from-literal=DATABASE_URL="$DATABASE_URL" \
-  --dry-run=client \
-  -o yaml | kubectl apply -f -
+terraform -chdir=infrastructure/terraform output -raw key_vault_name
+terraform -chdir=infrastructure/terraform output -raw tenant_id
+terraform -chdir=infrastructure/terraform output -raw workload_identity_client_id
 ```
 
-Register the application after the secret exists:
+If Terraform recreates the Key Vault or Workload Identity, update those
+identifiers before releasing. They are identifiers, not credentials; the
+database URL remains only in Terraform's protected remote state, Key Vault, and
+the CSI-managed Kubernetes Secret.
+
+After applying the infrastructure, verify the add-on before registering the
+Argo CD application:
+
+```bash
+az aks show \
+  --resource-group <resource-group> \
+  --name <aks-cluster-name> \
+  --query addonProfiles.azureKeyvaultSecretsProvider.enabled
+
+kubectl get csidriver secrets-store.csi.k8s.io
+```
+
+Register the application; its first sync creates and mounts the
+SecretProviderClass, which in turn creates `url-shortener-config`:
 
 ```bash
 kubectl apply -f argocd/application.yaml
+kubectl get secretproviderclass -n url-shortener
+kubectl get secret url-shortener-config -n url-shortener
 ```
+
+CSI rotation refreshes the mounted content and synchronized Kubernetes Secret.
+Because `DATABASE_URL` is consumed as an environment variable, running
+containers pick up a rotated value on their next restart or rollout.
 
 Manual render/apply (Argo CD normally owns this step):
 

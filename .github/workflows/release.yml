@@ -4,19 +4,32 @@ on:
   push:
     branches:
       - main
+    # Desired-state updates (including rollback) must not publish another image.
+    paths-ignore:
+      - 'k8s/overlays/production/**'
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 concurrency:
   group: production-release
   cancel-in-progress: false
 
 jobs:
+  quality:
+    uses: ./.github/workflows/typecheck.yml
+
+  security:
+    uses: ./.github/workflows/security.yml
+
+  configuration:
+    uses: ./.github/workflows/config-validation.yml
+
   release:
-    # The desired-state commit also triggers this workflow; don't publish it again.
-    if: github.actor != 'github-actions[bot]'
+    needs: [quality, security, configuration]
+    permissions:
+      contents: read
+      id-token: write
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -24,23 +37,17 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+          persist-credentials: false
 
-      - name: Sign in to Azure with OIDC
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Build and push immutable image to ACR
+      - name: Verify source commit is still current
         env:
-          ACR_NAME: ${{ vars.ACR_NAME }}
-          IMAGE_TAG: ${{ github.sha }}
+          SOURCE_SHA: ${{ github.sha }}
         run: |
-          ACR_LOGIN_SERVER="$(az acr show --name "$ACR_NAME" --query loginServer --output tsv)"
-          az acr login --name "$ACR_NAME"
-          docker build --tag "$ACR_LOGIN_SERVER/url-shortener:$IMAGE_TAG" .
-          docker push "$ACR_LOGIN_SERVER/url-shortener:$IMAGE_TAG"
+          git fetch origin main
+          if [ "$(git rev-parse origin/main)" != "$SOURCE_SHA" ]; then
+            echo "::error::main advanced during CI; the newer commit must be released instead."
+            exit 1
+          fi
 
       - name: Set production desired state to this commit
         env:
@@ -57,25 +64,79 @@ jobs:
           content, count = re.subn(r"(?m)^    newTag: .+$", f"    newTag: {tag}", content)
           if count != 1:
               raise SystemExit(f"Expected one production image tag, found {count}")
-          kustomization.write_text(content)
+          image_content = content
 
           patch = Path("k8s/overlays/production/deployment-patch.yaml")
           content = patch.read_text()
           content, count = re.subn(
-              r"(?m)^              value: deploy$", f"              value: {tag}", content
+              r"(?m)^([ \t]*- name: GIT_SHA\n[ \t]*value: )[^\n]+$",
+              lambda match: match.group(1) + tag,
+              content,
           )
           if count != 1:
               raise SystemExit(f"Expected one production GIT_SHA value, found {count}")
+          # Validate both replacements before writing either file.
+          kustomization.write_text(image_content)
           patch.write_text(content)
           PY
+
+      - name: Create release identity token
+        id: release-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Configure release identity
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          APP_SLUG: ${{ steps.release-token.outputs.app-slug }}
+        run: |
+          BOT_ID="$(gh api "users/${APP_SLUG}[bot]" --jq .id)"
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${BOT_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
+          gh auth setup-git
+
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build immutable image
+        env:
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          ACR_LOGIN_SERVER="$(az acr show --name "$ACR_NAME" --query loginServer --output tsv)"
+          az acr login --name "$ACR_NAME"
+          IMAGE_REF="$ACR_LOGIN_SERVER/url-shortener:$IMAGE_TAG"
+          docker build --tag "$IMAGE_REF" .
+          echo "IMAGE_REF=$IMAGE_REF" >> "$GITHUB_ENV"
+
+      - name: Scan the release image before publishing
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE_REF }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Push the scanned image to ACR
+        run: docker push "$IMAGE_REF"
 
       - name: Commit production image update
         env:
           IMAGE_TAG: ${{ github.sha }}
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add k8s/overlays/production/kustomization.yaml \
             k8s/overlays/production/deployment-patch.yaml
           git commit -m "chore(release): deploy ${IMAGE_TAG}"
+          # A normal push fails safely if main advanced; never force or rebase
+          # a deployment of an older source commit over newer source changes.
           git push origin HEAD:main
