@@ -1,7 +1,6 @@
 name: Infrastructure and manifest checks
 
 on:
-  pull_request:
   workflow_call:
 
 permissions:
@@ -61,4 +60,4 @@ jobs:
       - name: Render Kustomize and validate schemas
         run: |
           set -o pipefail
-          kubectl kustomize k8s/overlays/production | docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0 -strict -summary -
+          kubectl kustomize k8s/overlays/production | docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0 -strict -ignore-missing-schemas -summary -

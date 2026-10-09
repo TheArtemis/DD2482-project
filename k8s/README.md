@@ -4,7 +4,8 @@
 
 Argo CD is installed once per cluster. Connect `kubectl` to the AKS cluster
 first, then install the upstream stable manifests and register this repository's
-application after creating the database secret:
+application. Terraform enables the Azure Key Vault Secrets Store CSI Driver
+add-on on AKS; no database value is copied manually into the cluster:
 
 ```bash
 az aks get-credentials \
@@ -20,8 +21,9 @@ kubectl rollout status deployment/argocd-server -n argocd --timeout=5m
 The Argo CD `Application` watches `main` at `k8s/overlays/production`, uses
 Kustomize, and automatically syncs, prunes removed resources, and repairs live
 drift. The production overlay uses an immutable source commit SHA for the app
-image. The namespace is declared in Kustomize; the secret bootstrap below
-creates it before Argo CD's first sync.
+image. The namespace, Workload Identity ServiceAccount, and SecretProviderClass
+run in earlier `PreSync` waves so the migration Job can retrieve its database
+connection on the first Argo CD synchronization.
 
 For the initial login, port-forward the API server and retrieve the generated
 admin password:
@@ -98,31 +100,54 @@ The `PreSync` migration Job runs `alembic upgrade head` from the same SHA-tagged
 image before Argo CD updates the Deployment. The `PostSync` smoke-test Job creates
 a temporary link, verifies the redirect destination, and deletes the link after
 the Deployment becomes healthy. A failed hook leaves the Argo CD sync unhealthy
-for inspection. Both jobs read `DATABASE_URL` from `url-shortener-config`.
+for inspection. The migration Job and Deployment mount the Key Vault CSI volume.
+The `SecretProviderClass` mirrors Key Vault's `database-url` value into the
+`url-shortener-config` Kubernetes Secret as the `DATABASE_URL` key expected by
+the application.
 
-## Runtime database secret setup
+## Key Vault CSI configuration
+
+Terraform creates the Key Vault secret, Workload Identity, federated credential,
+and least-privilege `Key Vault Secrets User` assignment. It also enables the AKS
+CSI add-on and automatic secret rotation. The non-secret identifiers in
+`k8s/base/service-account.yaml` and `k8s/base/secret-provider-class.yaml` must
+match these Terraform outputs:
 
 ```bash
-kubectl create namespace url-shortener --dry-run=client -o yaml | kubectl apply -f -
-
-DATABASE_URL="$(az keyvault secret show \
-  --vault-name urlshortener-pf9nt4-kv \
-  --name database-url \
-  --query value \
-  --output tsv)"
-
-kubectl create secret generic url-shortener-config \
-  --namespace url-shortener \
-  --from-literal=DATABASE_URL="$DATABASE_URL" \
-  --dry-run=client \
-  -o yaml | kubectl apply -f -
+terraform -chdir=infrastructure/terraform output -raw key_vault_name
+terraform -chdir=infrastructure/terraform output -raw tenant_id
+terraform -chdir=infrastructure/terraform output -raw workload_identity_client_id
 ```
 
-Register the application after the secret exists:
+If Terraform recreates the Key Vault or Workload Identity, update those
+identifiers before releasing. They are identifiers, not credentials; the
+database URL remains only in Terraform's protected remote state, Key Vault, and
+the CSI-managed Kubernetes Secret.
+
+After applying the infrastructure, verify the add-on before registering the
+Argo CD application:
+
+```bash
+az aks show \
+  --resource-group <resource-group> \
+  --name <aks-cluster-name> \
+  --query addonProfiles.azureKeyvaultSecretsProvider.enabled
+
+kubectl get csidriver secrets-store.csi.k8s.io
+```
+
+Register the application; its first sync creates and mounts the
+SecretProviderClass, which in turn creates `url-shortener-config`:
 
 ```bash
 kubectl apply -f argocd/application.yaml
+kubectl get secretproviderclass -n url-shortener
+kubectl get secret url-shortener-config -n url-shortener
 ```
+
+CSI rotation refreshes the mounted content and synchronized Kubernetes Secret.
+Because `DATABASE_URL` is consumed as an environment variable, running
+containers pick up a rotated value on their next restart or rollout.
 
 Manual render/apply (Argo CD normally owns this step):
 
