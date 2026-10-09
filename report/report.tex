@@ -145,26 +145,13 @@ Keeping source and desired state together simplifies the course submission, at t
 
 \newpage
 \section{Security and Quality gates}
-Quality and security automation checks application code, dependencies, container images, and infrastructure before release.
-Ruff enforces formatting and detects selected Python issues; \texttt{ty} checks types; pytest verifies behavior.
- \file{config-validation.yml} checks Terraform formatting, initializes providers without a cloud backend, runs Terraform validation and TFLint, and validates the rendered production manifests with kubeconform. 
-CI ignores missing Kubernetes schemas, so custom resources without available schemas are not fully validated.
+Quality and security automation checks code, dependencies, images, and infrastructure before release. Ruff enforces formatting and lint rules, \texttt{ty} checks types, and pytest verifies behavior. \file{config-validation.yml} checks Terraform formatting, initializes providers without a cloud backend, runs validation and TFLint, and validates rendered manifests with kubeconform. \file{security.yml} runs Gitleaks on repository history and Trivy on dependencies, Terraform configuration, and container images. Configured HIGH/CRITICAL findings fail the jobs; the release image is scanned again before publication. Dependabot proposes weekly Python and Actions updates. Runtime controls include a non-root container, resource requests/limits, private PostgreSQL, and restricted Key Vault and AKS API access. Structured logs, request IDs, and \file{/version} support traceability.
 
-\file{security.yml} uses Gitleaks to scan repository history for exposed secrets. Trivy scans source dependencies, Terraform misconfigurations, and the built container image.
+\section{Key design decisions}
+The API and browser frontend share one stateless container to simplify deployment and support multiple replicas, while managed PostgreSQL keeps durable data independent of the application pods and reduces backup administration. AKS was chosen to demonstrate Kubernetes rollout control and GitOps, despite its greater complexity than simpler hosting options. Terraform defines Azure infrastructure, while Kustomize defines workloads and production settings, separating cloud provisioning from application releases. Security combines CI scans with runtime controls: OIDC avoids a stored Azure client secret, Workload Identity grants scoped Key Vault access, and private database networking reduces public exposure. Argo CD makes Git the source of desired deployment state: reviewed manifests and SHA-tagged image references provide an auditable version history, automatic synchronization delivers changes, and self-healing repairs drift. Actions publishes artifacts and updates Git without deploying directly to the cluster. Ordered migration and smoke-test hooks check the database before rollout and application behavior afterward.
 
-Configured HIGH/CRITICAL findings fail the relevant jobs, and the release image is scanned again before publishing. 
-Image scans exclude unfixed vulnerabilities, which reduces blocking findings but can leave known vulnerabilities in a passing image. 
-
-Dependabot proposes weekly Python dependency and GitHub Actions updates; these changes can pass through the same review and CI process.
-
-Runtime controls complement the pipeline: the container runs as a non-root user, pods have resource requests/limits, PostgreSQL is private, and Key Vault and the AKS API restrict network access.
-
-Structured request logs, request IDs, and \file{/version} help relate runtime behavior to a source commit. 
-
-These controls improve traceability and constrain access, but do not establish complete production security.
-
-The public Service uses HTTP without configured TLS or ingress routing. Authentication and rate limiting are absent, so accessible clients can create or disable links.
-Application NetworkPolicy resources and explicit pod-level hardening are also absent, and the application connects with a database administrator account. TLS, restricted database roles, rate limiting, and network isolation are priorities before broader use. There are no configured service-level objectives or alert rules; centralized monitoring and tested recovery procedures would improve operational assurance.
+\section{Limitations}
+The single-node AKS configuration reduces cost but cannot provide availability during node failure, even with two replicas. Finite Azure credits also limit continuous availability. Public access uses HTTP without TLS, authentication, or rate limiting; clients can create or disable links, and the application uses database administrator privileges. Application NetworkPolicy resources and explicit pod-level hardening are absent. SQLite-based CI tests do not verify PostgreSQL-specific behavior, image scans ignore unfixed vulnerabilities, and custom resources with missing schemas escape full validation. SHA tags provide traceability without enforcing image immutability. Argo CD reports deployment failures without automatic rollback; restoring an earlier image does not reverse database migrations. Secret rotation requires container restarts. Service-level objectives, alert rules, and validated disaster-recovery procedures are absent. TLS, restricted database roles, rate limiting, and network isolation are priorities before broader use.
 
 \section{AI tools usage}
 We have used AI agents for code reviews, debugging and to help us understand the terraform and azure documentation. 
