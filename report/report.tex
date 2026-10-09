@@ -156,10 +156,9 @@ The public Service uses HTTP without configured TLS or ingress routing. Authenti
 Application NetworkPolicy resources and explicit pod-level hardening are also absent, and the application connects with a database administrator account. TLS, restricted database roles, rate limiting, and network isolation are priorities before broader use. There are no configured service-level objectives or alert rules; centralized monitoring and tested recovery procedures would improve operational assurance.
 
 \section{AI tools usage}
-% To be written by the project authors: tools used, scope of assistance,
-% verification of output, and relevant limitations or rejected suggestions.
-\textit{To be completed by the project authors.}
-\vspace{20mm}
+We have used AI agents for code reviews, debugging and to help us understand the terraform and azure documentation. 
+The entire url-shortener app (folder app) has been entirely AI generated as it is not the focus of the current project. 
+LLMs were also used to write part of the doumentation and the README file.
 
 \section{How to test and evaluate}
 To examine CI in more detail, read the triggered GitHub Actions workflows in \file{.github/workflows}: \file{typecheck.yml}, \file{security.yml}, and \file{config-validation.yml} define the pull-request checks, while \file{release.yml} calls these checks again on pushes to \texttt{main} before publishing a release.
@@ -167,10 +166,8 @@ Their event triggers, jobs, and commands specify the pipeline; then the runs we'
 
 The implementation and configuration(especially for the infrastructure side) can be inspected directly in the repository: Terraform state bootstrap is in \file{infrastructure/bootstrap-state}, and Azure resource definitions are in \file{infrastructure/terraform}.
 Kubernetes resources are in \file{k8s/base}, production overrides are in \file{k8s/overlays/production}, and the Argo CD application is specified in \file{argocd/application.yaml}.
-%The \file{Dockerfile} defines the container build, \file{app} contains the application code, \file{migrations} contains database schema changes, and \file{tests} contains the automated tests. 
-%Setup instructions are provided in \file{README.md} and \file{k8s/README.md}.
 
-% Application testing procedures and observed results will be added by the authors.
-\textit{Application testing and evaluation results: to be added by the project authors.}
+In order to verify that the Application is up and to curl the url shortener we kindly remind the grade to send us a mail
+so that we will ensure that the application is up (as we are spening credits to deploy an Azure) and we will tell you the url where to find the deployed application.
 
 \end{document}

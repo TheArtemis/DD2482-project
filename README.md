@@ -1,26 +1,22 @@
 # Snip — URL shortener
 
-A small but complete URL-shortening application built with FastAPI, SQLAlchemy,
-Alembic, uv, and a dependency-free browser frontend.
+A URL-shortening application hosted on Microsoft Azure, built with FastAPI,
+SQLAlchemy, Alembic, PostgreSQL, and a dependency-free browser frontend.
 
-## Run locally
+## Open the application online
 
-[Install uv](https://docs.astral.sh/uv/getting-started/installation/). The project
-requires Python 3.12 or newer; uv creates and maintains the local `.venv`.
+Snip runs on Azure Kubernetes Service (AKS) and is accessible in a browser through
+the public IP address of its Azure LoadBalancer Service. Open
+`http://<external-ip>` to use the application, or `http://<external-ip>/docs` for
+interactive API documentation.
+
+Deployment operators can retrieve the public IP from the AKS cluster with:
 
 ```bash
-./run.sh
+kubectl get service url-shortener -n url-shortener
 ```
 
-Open <http://localhost:8000>. Interactive API documentation is available at
-<http://localhost:8000/docs>.
-
-The script synchronizes locked dependencies, applies database migrations, and
-starts the backend and frontend together. It uses a local SQLite database by
-default. Press `Ctrl+C` to stop the application.
-
-Copy `.env.example` to `.env` to configure the host, port, reload behavior,
-database URL, or displayed version. The `.env` file is ignored by Git.
+Use the address in the `EXTERNAL-IP` column in place of `<external-ip>`.
 
 ## API
 
@@ -37,7 +33,7 @@ database URL, or displayed version. The `.env` file is ignored by Git.
 Example:
 
 ```bash
-curl -sS http://localhost:8000/links \
+curl -sS 'http://<external-ip>/links' \
   -H 'content-type: application/json' \
   -d '{"destination_url":"https://example.com/a/long/path"}'
 ```
@@ -45,66 +41,30 @@ curl -sS http://localhost:8000/links \
 Deleting a link disables its redirect while retaining its statistics. The API
 emits structured request logs and returns an `x-request-id` response header.
 
-## Local development
+## Azure infrastructure and deployment
 
-Set `DATABASE_URL` to use an existing PostgreSQL server instead of SQLite, or
-override the listener with `APP_HOST` and `APP_PORT`. Enable automatic reload
-during development with `APP_RELOAD=1 ./run.sh`.
+Terraform provisions AKS, Azure Container Registry (ACR), networking, Azure
+Database for PostgreSQL, and Azure Key Vault. The state-storage configuration is
+in `infrastructure/bootstrap-state/`, and the application infrastructure is in
+`infrastructure/terraform/`.
 
-The equivalent individual commands are:
-
-```bash
-uv sync --locked
-uv run alembic upgrade head
-uv run uvicorn app.main:app --reload
-```
-
-Run quality checks with:
-
-```bash
-uv run pytest
-uv run ruff check .
-uv run ruff format --check .
-uv run ty check
-```
-
-Run only the migration and database integration tests with:
-
-```bash
-uv run pytest -m integration
-```
-
-## Local configuration and image checks
-
-These checks do not require Azure credentials or running Azure resources. They
-use downloaded Terraform providers, Kubernetes schemas, and container images.
-With Terraform, TFLint, kubectl, Docker, and Trivy installed, run:
-
-```bash
-terraform fmt -check -recursive infrastructure
-for module in infrastructure/bootstrap-state infrastructure/terraform; do
-  terraform -chdir="$module" init -backend=false -input=false -lockfile=readonly
-  terraform -chdir="$module" validate -no-color
-  tflint --chdir="$module" --format=compact
-done
-
-set -o pipefail
-kubectl kustomize k8s/overlays/production | docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0 -strict -summary -
-docker build --tag url-shortener:ci .
-trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 url-shortener:ci
-```
-
-The pull-request workflows run the same configuration and image gates alongside
-the existing application, source dependency, and secret checks.
-
-## Kubernetes and Argo CD
+GitHub Actions builds and scans commit SHA-tagged container images, publishes
+them to ACR, and updates the production deployment configuration in Git. Argo CD
+reconciles that configuration with AKS, running database migrations before the
+application rollout and a smoke test after the deployment becomes healthy.
 
 The Kubernetes base and production overlay are in `k8s/`. To bootstrap Argo CD
 in AKS and register the application for GitOps deployment, follow [the Kubernetes deployment guide](k8s/README.md).
 
-Runtime and development dependencies are declared in `pyproject.toml` and
-resolved reproducibly by the committed `uv.lock`. Use `uv add <package>` for a
-runtime dependency or `uv add --dev <package>` for a development dependency.
+## Automated quality and security checks
+
+GitHub Actions runs unit and integration tests, Ruff formatting and lint checks,
+and ty type checks. It also validates Terraform and Kubernetes configuration,
+builds the container image, and runs Gitleaks and Trivy security scans. Dependabot
+proposes updates to Python dependencies and GitHub Actions.
+
+Python dependencies are declared in `pyproject.toml` and resolved reproducibly
+by the committed `uv.lock`.
 
 ## Layout
 
@@ -114,4 +74,7 @@ runtime dependency or `uv add --dev <package>` for a development dependency.
 - `app/web`: responsive HTML/CSS/JavaScript frontend
 - `migrations`: Alembic database migrations
 - `tests`: unit and API tests
-- `run.sh`: local dependency, migration, and application launcher
+- `infrastructure`: Terraform state storage and Azure resource definitions
+- `k8s`: Kubernetes base resources and production overlay
+- `argocd`: GitOps application configuration
+- `.github/workflows`: automated checks and release pipeline
