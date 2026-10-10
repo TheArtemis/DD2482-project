@@ -56,9 +56,20 @@ shortenForm.addEventListener("submit", async (event) => {
 });
 
 copyButton.addEventListener("click", async () => {
-  await navigator.clipboard.writeText(shortUrl.href);
-  copyButton.textContent = "Copied!";
-  window.setTimeout(() => { copyButton.textContent = "Copy"; }, 1600);
+  const message = document.querySelector("#form-message");
+  const manualCopyMessage = "Select the link and copy it manually.";
+  message.textContent = "";
+  if (!navigator.clipboard?.writeText) {
+    message.textContent = manualCopyMessage;
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(shortUrl.href);
+    copyButton.textContent = "Copied!";
+    window.setTimeout(() => { copyButton.textContent = "Copy"; }, 1600);
+  } catch {
+    message.textContent = manualCopyMessage;
+  }
 });
 
 statsForm.addEventListener("submit", async (event) => {
