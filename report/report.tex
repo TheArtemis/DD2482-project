@@ -76,7 +76,7 @@ Although the application is small, its durable data and schema migrations make i
 The whole application was deployed onto Azure platform thanks to the free credits given to student accounts through KTH email.
 The backend serves the API and frontend from one container, simplifying deployment. 
 Azure Kubernetes Service (AKS) runs the pods, Azure Container Registry (ACR) stores images, and managed PostgreSQL 16 holds data outside the cluster.
-A public LoadBalancer routes browser requests to the application. 
+A public LoadBalancer routes browser requests to the application. Public access to the application API and frontend was chosen so everyone can access it and grade our work.
 PostgreSQL has public access disabled and is reached through a delegated subnet and private DNS. 
 Key Vault supplies the database connection through Azure Workload Identity and the Secrets Store CSI driver.
 
@@ -120,7 +120,7 @@ Reverting the overlay can select an earlier image, but does not undo database mi
 
 \section{Infrastructure as Code}
 \file{infrastructure/terraform} provisions AKS, ACR, virtual networking, private PostgreSQL, Key Vault, identities, and optional Azure Monitor integration. 
-AKS uses RBAC and restricted API-server IP ranges. 
+AKS uses RBAC. Terraform supports API-server IP restrictions but also permits an empty allowlist, which allows access from any IP to the AKS management API while still requiring authentication and RBAC authorization. This management endpoint is separate from the public application API used to try the URL shortener.
 Its kubelet identity receives \texttt{AcrPull}, while a separate federated workload identity receives \texttt{Key Vault Secrets User}.
 CSI mounts the connection secret and mirrors it into the Kubernetes Secret consumed as \file{DATABASE_URL}. 
 Rotation refreshes CSI content, but running containers need a restart to refresh environment variables.
@@ -145,7 +145,7 @@ Keeping source and desired state together simplifies the course submission, at t
 
 \newpage
 \section{Security and Quality gates}
-Quality and security automation checks code, dependencies, images, and infrastructure before release. Ruff enforces formatting and lint rules, \texttt{ty} checks types, and pytest verifies behavior. \file{config-validation.yml} checks Terraform formatting, initializes providers without a cloud backend, runs validation and TFLint, and validates rendered manifests with kubeconform. \file{security.yml} runs Gitleaks on repository history and Trivy on dependencies, Terraform configuration, and container images. Configured HIGH/CRITICAL findings fail the jobs; the release image is scanned again before publication. Dependabot proposes weekly Python and Actions updates. Runtime controls include a non-root container, resource requests/limits, private PostgreSQL, and restricted Key Vault and AKS API access. Structured logs, request IDs, and \file{/version} support traceability.
+Quality and security automation checks code, dependencies, images, and infrastructure before release. Ruff enforces formatting and lint rules, \texttt{ty} checks types, and pytest verifies behavior. \file{config-validation.yml} checks Terraform formatting, initializes providers without a cloud backend, runs validation and TFLint, and validates rendered manifests with kubeconform. \file{security.yml} runs Gitleaks on repository history and Trivy on dependencies, Terraform configuration, and container images. Configured HIGH/CRITICAL findings fail the jobs; the release image is scanned again before publication. Dependabot proposes weekly Python and Actions updates. Runtime controls include a non-root container, resource requests/limits, private PostgreSQL, restricted Key Vault access, and AKS RBAC. AKS management API access can be restricted by IP, but an empty allowlist removes that network restriction. Structured logs, request IDs, and \file{/version} support traceability.
 
 \section{Key design decisions}
 The API and browser frontend share one stateless container to simplify deployment and support multiple replicas, while managed PostgreSQL keeps durable data independent of the application pods and reduces backup administration. AKS was chosen to demonstrate Kubernetes rollout control and GitOps, despite its greater complexity than simpler hosting options. Terraform defines Azure infrastructure, while Kustomize defines workloads and production settings, separating cloud provisioning from application releases. Security combines CI scans with runtime controls: OIDC avoids a stored Azure client secret, Workload Identity grants scoped Key Vault access, and private database networking reduces public exposure. Argo CD makes Git the source of desired deployment state: reviewed manifests and SHA-tagged image references provide an auditable version history, automatic synchronization delivers changes, and self-healing repairs drift. Actions publishes artifacts and updates Git without deploying directly to the cluster. Ordered migration and smoke-test hooks check the database before rollout and application behavior afterward.

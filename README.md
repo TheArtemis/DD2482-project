@@ -56,6 +56,42 @@ application rollout and a smoke test after the deployment becomes healthy.
 The Kubernetes base and production overlay are in `k8s/`. To bootstrap Argo CD
 in AKS and register the application for GitOps deployment, follow [the Kubernetes deployment guide](k8s/README.md).
 
+### Set up your own Azure deployment
+
+In case you would like to deploy the application into your Azure follow this list of rules.
+You need an Azure subscription with available credits and permission to create
+resources and assign roles, plus Azure CLI, Terraform (1.8+), kubectl, and Docker.
+Run the following steps from the repository root:
+
+1. Sign in with `az login`, select your subscription with
+   `az account set --subscription <subscription-id>`, and export
+   `ARM_SUBSCRIPTION_ID=<subscription-id>`. Create a resource group or use an
+   existing one. Ensure the required Azure resource providers are registered;
+   Terraform does not register them automatically.
+2. Copy each module's `terraform.tfvars.example` to `terraform.tfvars`. Set your
+   resource group, an allowed Azure region, and your public IPv4 address.
+   Set `aks_api_authorized_ip_ranges` to administrator/cluster egress CIDRs or
+   `[]` for unrestricted network access to the AKS management API. This setting
+   is separate from public access to the URL shortener.
+3. Run `terraform init` and `terraform apply` in
+   `infrastructure/bootstrap-state` to create state storage. Your Terraform
+   identity needs **Storage Blob Data Contributor** access to this storage
+   (including during bootstrap). Save its `backend_config` output to a local
+   file, then run `terraform init -backend-config=<absolute-path-to-file>` and
+   `terraform apply` in `infrastructure/terraform`. Keep Terraform state private
+   and back up the bootstrap module's local state.
+4. Use the Terraform outputs to update the registry image references under
+   `k8s/`, the Workload Identity client ID in `k8s/base/service-account.yaml`,
+   and the client ID, tenant ID, and vault name in
+   `k8s/base/secret-provider-class.yaml`. Build and publish the application image
+   to your ACR, and set its tag and matching `GIT_SHA` in the production overlay.
+5. Point `argocd/application.yaml` at your repository, commit the deployment
+   configuration, and follow the [Argo CD installation steps](k8s/README.md#install-argo-cd-aks)
+   and [CSI configuration steps](k8s/README.md#key-vault-csi-configuration).
+   Register the application with `kubectl apply -f argocd/application.yaml`.
+   Once the deployment is healthy, retrieve the Service's `EXTERNAL-IP` and open
+   `http://<external-ip>` to try the shortener.
+
 ## Automated quality and security checks
 
 GitHub Actions runs unit and integration tests, Ruff formatting and lint checks,

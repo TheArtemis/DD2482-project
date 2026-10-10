@@ -21,9 +21,10 @@ kubectl rollout status deployment/argocd-server -n argocd --timeout=5m
 The Argo CD `Application` watches `main` at `k8s/overlays/production`, uses
 Kustomize, and automatically syncs, prunes removed resources, and repairs live
 drift. The production overlay uses an immutable source commit SHA for the app
-image. The namespace, Workload Identity ServiceAccount, and SecretProviderClass
-run in earlier `PreSync` waves so the migration Job can retrieve its database
-connection on the first Argo CD synchronization.
+image. During the `Sync` phase, the namespace is applied at wave `-3`, followed
+by the Workload Identity ServiceAccount and SecretProviderClass at wave `-2`.
+These resources are available before the migration Job at wave `-1`, allowing
+it to retrieve its database connection on the first Argo CD synchronization.
 
 For the initial login, port-forward the API server and retrieve the generated
 admin password:
@@ -96,8 +97,13 @@ deploy the application.
 
 ## Sync hooks
 
-The `PreSync` migration Job runs `alembic upgrade head` from the same SHA-tagged
-image before Argo CD updates the Deployment. The `PostSync` smoke-test Job creates
+Argo CD orders resources by phase first, then by wave within each phase. The
+migration Job is a `Sync` hook at wave `-1`. It runs `alembic upgrade head` from
+the same SHA-tagged image and must succeed before Argo CD proceeds to the
+Deployment and Service at the default wave `0`. A failed migration prevents
+the application rollout from proceeding.
+
+The `PostSync` smoke-test Job creates
 a temporary link, verifies the redirect destination, and deletes the link after
 the Deployment becomes healthy. A failed hook leaves the Argo CD sync unhealthy
 for inspection. The migration Job and Deployment mount the Key Vault CSI volume.
