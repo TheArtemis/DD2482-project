@@ -228,3 +228,8 @@ docs
 # Local URL shortener data
 *.db
 *.db-journal
+
+# Keep only the report source and compiled PDF.
+/report/*
+!/report/report.tex
+!/report/report.pdf
